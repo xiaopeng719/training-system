@@ -519,6 +519,25 @@ app.post('/api/progress', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: '缺少员工信息，请重新登录' });
     }
     
+    // 验证：检查该员工是否被分配到此培训
+    const assigned = await queryOne(
+      'SELECT id FROM training_progress WHERE training_id = ? AND employee_id = ? AND score = 0',
+      [training_id, employee_id]
+    );
+    const isAdmin = req.user.role === 'admin';
+    
+    // 非管理员必须被分配才能参加考试
+    if (!isAdmin && !assigned) {
+      // 再检查是否已有成绩（允许重考）
+      const hasScore = await queryOne(
+        'SELECT id FROM training_progress WHERE training_id = ? AND employee_id = ? AND score > 0',
+        [training_id, employee_id]
+      );
+      if (!hasScore) {
+        return res.status(403).json({ error: '您未被分配此培训，无法参加考试' });
+      }
+    }
+    
     // 验证：检查学习时长是否满足要求
     const training = await queryOne('SELECT min_study_time, course_id FROM trainings WHERE id = ?', [training_id]);
     if (training && training.min_study_time > 0) {
@@ -650,6 +669,27 @@ app.get('/api/user/info', authMiddleware, async (req, res) => {
   try {
     const user = await queryOne('SELECT id, username, name, role FROM users WHERE id = ?', [req.user.id]);
     res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/user/password', authMiddleware, async (req, res) => {
+  try {
+    const { old_password, new_password } = req.body;
+    if (!old_password || !new_password) {
+      return res.status(400).json({ error: '请输入原密码和新密码' });
+    }
+    if (new_password.length < 6) {
+      return res.status(400).json({ error: '新密码至少6位' });
+    }
+    const user = await queryOne('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user || !verifyPassword(old_password, user.password)) {
+      return res.status(400).json({ error: '原密码错误' });
+    }
+    const newPwd = hashPassword(new_password);
+    await runSql('UPDATE users SET password = ? WHERE id = ?', [newPwd, req.user.id]);
+    res.json({ message: '密码修改成功' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

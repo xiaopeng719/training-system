@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, Menu, ConfigProvider, theme, Tag, Space, Dropdown, message } from 'antd';
+import { Layout, Menu, ConfigProvider, theme, Tag, Space, Dropdown, message, Modal, Form, Input } from 'antd';
 import {
   BookOutlined, QuestionCircleOutlined, TeamOutlined, TrophyOutlined,
-  DashboardOutlined, UserOutlined, LogoutOutlined
+  DashboardOutlined, UserOutlined, LogoutOutlined, KeyOutlined
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import axios from 'axios';
@@ -26,6 +26,8 @@ const { Header, Sider, Content } = Layout;
 function AppContent({ user, onLogout }) {
   const location = useLocation();
   const isAdmin = user.role === 'admin';
+  const [pwdModalVisible, setPwdModalVisible] = useState(false);
+  const [pwdForm] = Form.useForm();
 
   const allMenuItems = [
     { key: '/', icon: <DashboardOutlined />, label: <Link to="/">仪表盘</Link>, adminOnly: true },
@@ -40,13 +42,32 @@ function AppContent({ user, onLogout }) {
 
   const menuItems = isAdmin ? allMenuItems : allMenuItems.filter(i => !i.adminOnly);
 
+  const handleChangePassword = async (values) => {
+    try {
+      await axios.put('/api/user/password', {
+        old_password: values.old_password,
+        new_password: values.new_password
+      });
+      message.success('密码修改成功');
+      setPwdModalVisible(false);
+      pwdForm.resetFields();
+    } catch (err) {
+      message.error(err.response?.data?.error || '修改失败');
+    }
+  };
+
   const userMenu = {
     items: [
       { key: 'role', label: <Tag color={isAdmin ? 'gold' : 'blue'}>{isAdmin ? '管理员' : '普通员工'}</Tag>, disabled: true },
       { type: 'divider' },
+      { key: 'password', icon: <KeyOutlined />, label: '修改密码' },
+      { type: 'divider' },
       { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true }
     ],
-    onClick: ({ key }) => { if (key === 'logout') onLogout(); }
+    onClick: ({ key }) => {
+      if (key === 'logout') onLogout();
+      if (key === 'password') setPwdModalVisible(true);
+    }
   };
 
   return (
@@ -85,6 +106,31 @@ function AppContent({ user, onLogout }) {
           </Routes>
         </Content>
       </Layout>
+
+      <Modal title="修改密码" open={pwdModalVisible} onCancel={() => { setPwdModalVisible(false); pwdForm.resetFields(); }} footer={null}>
+        <Form form={pwdForm} layout="vertical" onFinish={handleChangePassword}>
+          <Form.Item name="old_password" label="原密码" rules={[{ required: true, message: '请输入原密码' }]}>
+            <Input.Password placeholder="请输入原密码" />
+          </Form.Item>
+          <Form.Item name="new_password" label="新密码" rules={[{ required: true, message: '请输入新密码' }, { min: 6, message: '密码至少6位' }]}>
+            <Input.Password placeholder="请输入新密码" />
+          </Form.Item>
+          <Form.Item name="confirm_password" label="确认新密码" rules={[{ required: true, message: '请确认新密码' }, ({ getFieldValue }) => ({
+            validator(_, value) {
+              if (!value || getFieldValue('new_password') === value) return Promise.resolve();
+              return Promise.reject(new Error('两次密码不一致'));
+            }
+          })]}>
+            <Input.Password placeholder="请再次输入新密码" />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">确认修改</Button>
+              <Button onClick={() => { setPwdModalVisible(false); pwdForm.resetFields(); }}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   );
 }

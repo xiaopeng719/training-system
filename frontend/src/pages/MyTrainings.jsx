@@ -87,7 +87,7 @@ function MyTrainings() {
       width: 200,
       render: (_, record) => (
         <Space>
-          <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/courses/${record.course_id}`)}>
+          <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/courses/${record.course_id}?from=my-trainings`)}>
             学习课件
           </Button>
           {!record.completed && (

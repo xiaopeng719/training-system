@@ -1,40 +1,49 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Card, Button, Typography, Space, Tag, message, Spin, Empty 
 } from 'antd';
 import { 
   ArrowLeftOutlined, FilePdfOutlined, FilePptOutlined, 
-  FileWordOutlined, VideoCameraOutlined, DownloadOutlined
+  FileWordOutlined, VideoCameraOutlined, DownloadOutlined, ClockCircleOutlined
 } from '@ant-design/icons';
 import { courseApi } from '../services/api';
 import axios from 'axios';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 
 function CourseViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [studySeconds, setStudySeconds] = useState(0);
   const startTimeRef = useRef(Date.now());
+  const timerRef = useRef(null);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  // 记住来源页面，用于返回
+  const from = new URLSearchParams(location.search).get('from');
 
   useEffect(() => {
     loadCourse();
     startTimeRef.current = Date.now();
+    // 启动计时器
+    timerRef.current = setInterval(() => {
+      setStudySeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
     return () => {
       // 离开页面时记录学习时长
+      if (timerRef.current) clearInterval(timerRef.current);
       const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-      if (duration > 5 && id) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        if (user.id) {
-          axios.post('/api/study-records', {
-            employee_id: user.id,
-            course_id: id,
-            duration,
-            completed: duration > 60
-          }).catch(() => {});
-        }
+      if (duration > 5 && id && user.id) {
+        axios.post('/api/study-records', {
+          employee_id: user.id,
+          course_id: id,
+          duration,
+          completed: duration > 60
+        }).catch(() => {});
       }
     };
   }, [id]);
@@ -47,6 +56,19 @@ function CourseViewer() {
       message.error('加载课件失败');
     }
     setLoading(false);
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleBack = () => {
+    if (from === 'my-trainings') navigate('/my-trainings');
+    else if (from === 'trainings') navigate('/trainings');
+    else if (from) navigate(from);
+    else navigate(-1);
   };
 
   const renderFileViewer = () => {
@@ -116,8 +138,8 @@ function CourseViewer() {
               <Button type="primary" icon={<DownloadOutlined />} size="large" href={fileUrl} download={course.file_name}>
                 下载文件
               </Button>
-              <Button icon={<ArrowLeftOutlined />} size="large" onClick={() => navigate('/courses')}>
-                返回列表
+              <Button icon={<ArrowLeftOutlined />} size="large" onClick={handleBack}>
+                返回
               </Button>
             </Space>
           </div>
@@ -137,11 +159,18 @@ function CourseViewer() {
     <Card
       title={
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/courses')} />
+          <Button icon={<ArrowLeftOutlined />} onClick={handleBack} />
           <Title level={4} style={{ margin: 0 }}>{course.title}</Title>
         </Space>
       }
-      extra={<Tag color={typeColors[course.file_type]}>{course.file_type?.toUpperCase()}</Tag>}
+      extra={
+        <Space>
+          <Tag icon={<ClockCircleOutlined />} color={studySeconds > 60 ? 'green' : 'blue'} style={{ fontSize: 14, padding: '2px 10px' }}>
+            已学习 {formatTime(studySeconds)}
+          </Tag>
+          <Tag color={typeColors[course.file_type]}>{course.file_type?.toUpperCase()}</Tag>
+        </Space>
+      }
     >
       {course.description && <Paragraph style={{ marginBottom: 24 }}>{course.description}</Paragraph>}
       {renderFileViewer()}

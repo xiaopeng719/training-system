@@ -140,7 +140,7 @@ function TrainingDetail() {
       >
         <Descriptions bordered column={{ xs: 1, sm: 2 }}>
           <Descriptions.Item label="关联课件">
-            {training.course_title}
+            <a onClick={() => navigate(`/courses/${training.course_id}?from=trainings`)}>{training.course_title}</a>
           </Descriptions.Item>
           <Descriptions.Item label="目标部门">
             <Tag color="blue">{training.department_name}</Tag>
