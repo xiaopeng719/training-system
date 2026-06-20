@@ -45,9 +45,9 @@ function ExamPage() {
       // 加载最低学习时长要求
       setMinStudyTime(res.data.min_study_time || 0);
       // 加载当前用户的学习时长
-      if (user.id && res.data.course_id) {
+      if (user.employee_id && res.data.course_id) {
         try {
-          const srRes = await axios.get(`/api/study-records?employee_id=${user.id}&course_id=${res.data.course_id}`);
+          const srRes = await axios.get(`/api/study-records?employee_id=${user.employee_id}&course_id=${res.data.course_id}`);
           if (srRes.data.length > 0) {
             setStudyTime(srRes.data[0].duration || 0);
           }
@@ -113,7 +113,7 @@ function ExamPage() {
 
   const handleSubmit = () => {
     // 检查是否已登录
-    if (!user.id) {
+    if (!user.employee_id) {
       message.error('请先登录后再参加考试');
       return;
     }
@@ -141,7 +141,7 @@ function ExamPage() {
       await progressApi.submit({
         training_id: trainingId,
         user_name: user.name,
-        employee_id: user.id,
+        employee_id: user.employee_id,
         score: finalScore,
         answers
       });

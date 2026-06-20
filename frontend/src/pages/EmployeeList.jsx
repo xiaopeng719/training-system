@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Modal, Form, Input, Select, Space, 
   message, Typography, Popconfirm, Tooltip, Tag 
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, UserOutlined, KeyOutlined } from '@ant-design/icons';
 import { departmentApi } from '../services/api';
 import axios from 'axios';
 
@@ -26,7 +26,7 @@ function EmployeeList() {
   const loadEmployees = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('/api/employees');
+      const res = await axios.get('/api/employees?include_user=1');
       setEmployees(res.data);
     } catch (err) {
       message.error('加载员工失败');
@@ -69,6 +69,29 @@ function EmployeeList() {
     }
   };
 
+  const handleResetPassword = async (record) => {
+    try {
+      await axios.put(`/api/employees/${record.id}`, { reset_password: true });
+      message.success(`已将 ${record.name} 的密码重置为 123456`);
+    } catch (err) {
+      message.error('重置密码失败');
+    }
+  };
+
+  const handleEdit = (record) => {
+    setEditing(record);
+    form.setFieldsValue({
+      username: record.username,
+      name: record.name,
+      department_id: record.department_id,
+      position: record.position,
+      phone: record.phone,
+      email: record.email,
+      role: record.role || 'user'
+    });
+    setModalVisible(true);
+  };
+
   const columns = [
     {
       title: '账号',
@@ -107,17 +130,28 @@ function EmployeeList() {
       render: (text) => text || '-'
     },
     {
+      title: '角色',
+      dataIndex: 'role',
+      key: 'role',
+      render: (role) => (
+        <Tag color={role === 'admin' ? 'gold' : 'blue'}>
+          {role === 'admin' ? '管理员' : '员工'}
+        </Tag>
+      )
+    },
+    {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 200,
       render: (_, record) => (
         <Space>
           <Tooltip title="编辑">
-            <Button type="link" icon={<EditOutlined />} onClick={() => {
-              setEditing(record);
-              form.setFieldsValue(record);
-              setModalVisible(true);
-            }} />
+            <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+          </Tooltip>
+          <Tooltip title="重置密码">
+            <Popconfirm title="确定将密码重置为 123456？" onConfirm={() => handleResetPassword(record)}>
+              <Button type="link" icon={<KeyOutlined />} />
+            </Popconfirm>
           </Tooltip>
           <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
             <Tooltip title="删除">
@@ -175,6 +209,12 @@ function EmployeeList() {
           </Form.Item>
           <Form.Item name="email" label="邮箱">
             <Input placeholder="请输入邮箱（选填）" />
+          </Form.Item>
+          <Form.Item name="role" label="角色" initialValue="user">
+            <Select>
+              <Select.Option value="admin">管理员</Select.Option>
+              <Select.Option value="user">普通员工</Select.Option>
+            </Select>
           </Form.Item>
           <Form.Item>
             <Space>

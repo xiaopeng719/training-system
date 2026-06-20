@@ -346,8 +346,13 @@ app.delete('/api/departments/:id', authMiddleware, async (req, res) => {
 
 app.get('/api/employees', async (req, res) => {
   try {
-    const { department_id } = req.query;
-    let sql = 'SELECT e.*, d.name as department_name FROM employees e LEFT JOIN departments d ON e.department_id = d.id';
+    const { department_id, include_user } = req.query;
+    let sql;
+    if (include_user) {
+      sql = 'SELECT e.*, d.name as department_name, u.role, u.username as user_username FROM employees e LEFT JOIN departments d ON e.department_id = d.id LEFT JOIN users u ON u.employee_id = e.id';
+    } else {
+      sql = 'SELECT e.*, d.name as department_name FROM employees e LEFT JOIN departments d ON e.department_id = d.id';
+    }
     const params = [];
     if (department_id) {
       sql += ' WHERE e.department_id = ?';
@@ -363,7 +368,7 @@ app.get('/api/employees', async (req, res) => {
 
 app.post('/api/employees', authMiddleware, async (req, res) => {
   try {
-    const { name, department_id, position, phone, email, username, password } = req.body;
+    const { name, department_id, position, phone, email, username, password, role } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: '姓名不能为空' });
     if (!department_id) return res.status(400).json({ error: '请选择部门' });
     if (!username || !username.trim()) return res.status(400).json({ error: '用户账号不能为空' });
@@ -378,14 +383,14 @@ app.post('/api/employees', authMiddleware, async (req, res) => {
     try {
       await runSql(
         'INSERT INTO users (id, username, password, name, role, employee_id) VALUES (?, ?, ?, ?, ?, ?)',
-        [userId, username.trim(), hashedPwd, name.trim(), 'user', id]
+        [userId, username.trim(), hashedPwd, name.trim(), role || 'user', id]
       );
     } catch (e) {
       if (e.message && e.message.includes('UNIQUE')) {
         return res.status(400).json({ error: '用户账号已存在，请换一个' });
       }
     }
-    res.json({ id, name: name.trim(), department_id, position, phone, email, username: username.trim() });
+    res.json({ id, name: name.trim(), department_id, position, phone, email, username: username.trim(), role: role || 'user' });
   } catch (err) {
     console.error('创建员工失败:', err);
     res.status(500).json({ error: err.message });
@@ -394,12 +399,31 @@ app.post('/api/employees', authMiddleware, async (req, res) => {
 
 app.put('/api/employees/:id', authMiddleware, async (req, res) => {
   try {
-    const { name, department_id, position, phone, email } = req.body;
+    const { name, department_id, position, phone, email, role, reset_password } = req.body;
+    
+    if (reset_password) {
+      // 重置密码
+      const hashedPwd = hashPassword('123456');
+      await runSql('UPDATE users SET password = ? WHERE employee_id = ?', [hashedPwd, req.params.id]);
+      return res.json({ message: '密码已重置为 123456' });
+    }
+    
     await runSql(
       'UPDATE employees SET name=?, department_id=?, position=?, phone=?, email=? WHERE id=?',
       [name, department_id, position || '', phone || '', email || '', req.params.id]
     );
-    res.json({ id: req.params.id, name, department_id, position, phone, email });
+    
+    // 同步更新用户表的姓名和角色
+    if (name || role) {
+      const updates = [];
+      const params = [];
+      if (name) { updates.push('name=?'); params.push(name); }
+      if (role) { updates.push('role=?'); params.push(role); }
+      params.push(req.params.id);
+      await runSql(`UPDATE users SET ${updates.join(', ')} WHERE employee_id=?`, params);
+    }
+    
+    res.json({ id: req.params.id, name, department_id, position, phone, email, role });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -418,9 +442,19 @@ app.delete('/api/employees/:id', authMiddleware, async (req, res) => {
 
 app.get('/api/trainings', async (req, res) => {
   try {
-    const rows = await queryAll(
-      'SELECT t.*, c.title as course_title, d.name as department_name FROM trainings t LEFT JOIN courses c ON t.course_id = c.id LEFT JOIN departments d ON t.department_id = d.id ORDER BY t.created_at DESC'
-    );
+    const { employee_id } = req.query;
+    let sql = 'SELECT t.*, c.title as course_title, d.name as department_name FROM trainings t LEFT JOIN courses c ON t.course_id = c.id LEFT JOIN departments d ON t.department_id = d.id';
+    const params = [];
+    
+    if (employee_id) {
+      // 只返回分配给该员工的培训
+      sql += ' WHERE t.id IN (SELECT training_id FROM training_progress WHERE employee_id = ?)';
+      params.push(employee_id);
+    }
+    
+    sql += ' ORDER BY t.created_at DESC';
+    const rows = await queryAll(sql, params);
+    
     // 为每个培训添加完成统计
     for (const training of rows) {
       const stats = await queryOne(
@@ -658,8 +692,8 @@ app.post('/api/login', async (req, res) => {
       const newPwd = hashPassword(password);
       await runSql('UPDATE users SET password = ? WHERE id = ?', [newPwd, user.id]);
     }
-    const token = jwt.sign({ id: user.id, username: user.username, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, username: user.username, name: user.name, role: user.role } });
+    const token = jwt.sign({ id: user.id, username: user.username, name: user.name, role: user.role, employee_id: user.employee_id }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, username: user.username, name: user.name, role: user.role, employee_id: user.employee_id } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

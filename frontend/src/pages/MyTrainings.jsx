@@ -21,8 +21,9 @@ function MyTrainings() {
   const loadMyTrainings = async () => {
     setLoading(true);
     try {
+      const employeeId = user.employee_id || user.id;
       const [trainingsRes, progressRes] = await Promise.all([
-        trainingApi.getAll(),
+        trainingApi.getAll(employeeId),
         progressApi.getAll()
       ]);
       
@@ -30,7 +31,7 @@ function MyTrainings() {
       const allProgress = progressRes.data;
       
       // 筛选当前用户的进度记录
-      const userProgress = allProgress.filter(p => p.user_name === user.name || p.user_name === user.id);
+      const userProgress = allProgress.filter(p => p.employee_id === employeeId || p.user_name === user.name);
       setMyProgress(userProgress);
       
       const completedTrainingIds = new Set(userProgress.map(p => p.training_id));

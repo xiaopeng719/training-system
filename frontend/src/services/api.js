@@ -43,7 +43,7 @@ export const departmentApi = {
 
 // 培训任务相关API
 export const trainingApi = {
-  getAll: () => api.get('/trainings'),
+  getAll: (employeeId) => api.get('/trainings', { params: employeeId ? { employee_id: employeeId } : {} }),
   getById: (id) => api.get(`/trainings/${id}`),
   create: (data) => api.post('/trainings', data),
   delete: (id) => api.delete(`/trainings/${id}`)
