@@ -13,6 +13,7 @@ function DepartmentList() {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [editingDept, setEditingDept] = useState(null);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -32,17 +33,39 @@ function DepartmentList() {
 
   const handleSubmit = async (values) => {
     try {
-      await departmentApi.create(values);
-      message.success('创建成功');
+      if (editingDept) {
+        await departmentApi.update(editingDept.id, values);
+        message.success('更新成功');
+      } else {
+        await departmentApi.create(values);
+        message.success('创建成功');
+      }
       setModalVisible(false);
+      setEditingDept(null);
       form.resetFields();
       loadDepartments();
     } catch (err) {
       if (err.response?.data?.error?.includes('UNIQUE')) {
         message.error('部门名称已存在');
       } else {
-        message.error('创建失败');
+        message.error(editingDept ? '更新失败' : '创建失败');
       }
+    }
+  };
+
+  const handleEdit = (record) => {
+    setEditingDept(record);
+    form.setFieldsValue({ name: record.name, description: record.description });
+    setModalVisible(true);
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await departmentApi.delete(id);
+      message.success('删除成功');
+      loadDepartments();
+    } catch (err) {
+      message.error('删除失败');
     }
   };
 
@@ -69,6 +92,23 @@ function DepartmentList() {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 160,
+      render: (_, record) => (
+        <Space>
+          <Tooltip title="编辑">
+            <Button type="link" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+          </Tooltip>
+          <Popconfirm title="确定删除该部门？" onConfirm={() => handleDelete(record.id)}>
+            <Tooltip title="删除">
+              <Button type="link" danger icon={<DeleteOutlined />} />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      )
     }
   ];
 
@@ -81,6 +121,7 @@ function DepartmentList() {
             type="primary" 
             icon={<PlusOutlined />} 
             onClick={() => {
+              setEditingDept(null);
               form.resetFields();
               setModalVisible(true);
             }}
@@ -102,10 +143,11 @@ function DepartmentList() {
       </Card>
 
       <Modal
-        title="新增部门"
+        title={editingDept ? '编辑部门' : '新增部门'}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
+          setEditingDept(null);
           form.resetFields();
         }}
         footer={null}
@@ -136,10 +178,11 @@ function DepartmentList() {
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">
-                创建
+                {editingDept ? '更新' : '创建'}
               </Button>
               <Button onClick={() => {
                 setModalVisible(false);
+                setEditingDept(null);
                 form.resetFields();
               }}>
                 取消

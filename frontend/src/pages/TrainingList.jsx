@@ -3,7 +3,7 @@ import {
   Card, Table, Button, Modal, Form, Input, Select, DatePicker, Space, 
   message, Tag, Typography, Popconfirm, Checkbox 
 } from 'antd';
-import { PlusOutlined, EyeOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, DeleteOutlined, PlayCircleOutlined, TeamOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { trainingApi, courseApi, departmentApi, questionApi } from '../services/api';
 import axios from 'axios';
@@ -54,6 +54,12 @@ function TrainingList() {
     { title: '目标部门', dataIndex: 'department_name', key: 'department_name', render: (t) => <Tag color="blue">{t}</Tag> },
     { title: '截止时间', dataIndex: 'deadline', key: 'deadline', width: 180, render: (t) => t || '无限制' },
     { title: '状态', key: 'status', width: 100, render: (_, r) => getStatusTag(r) },
+    { title: '完成情况', key: 'completion', width: 120, render: (_, r) => (
+      <Space>
+        <TeamOutlined style={{ color: '#1890ff' }} />
+        <span>{r.completed_count || 0} 人已完成</span>
+      </Space>
+    ) },
     { title: '操作', key: 'action', width: 200, render: (_, r) => (
       <Space>
         <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/trainings/${r.id}`)}>详情</Button>

@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -11,7 +12,12 @@ const execFileAsync = promisify(execFile);
 const { v4: uuidv4 } = require('uuid');
 const { initDatabase, queryAll, queryOne, runSql } = require('./database');
 
-const JWT_SECRET = 'training-system-secret-2026';
+// JWT_SECRET 从环境变量读取，fallback 为随机生成
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️  JWT_SECRET 未设置，使用随机密钥（重启后 token 失效）');
+}
+
 const SOFFICE_PATH = 'C:\\Program Files\\LibreOffice\\program\\soffice.exe';
 
 // JWT认证中间件
@@ -143,7 +149,7 @@ app.get('/api/courses/:id', async (req, res) => {
   }
 });
 
-app.post('/api/courses', upload.single('file'), async (req, res) => {
+app.post('/api/courses', authMiddleware, upload.single('file'), async (req, res) => {
   try {
     const { title, description, department_id } = req.body;
     const file = req.file;
@@ -178,7 +184,7 @@ app.post('/api/courses', upload.single('file'), async (req, res) => {
   }
 });
 
-app.delete('/api/courses/:id', async (req, res) => {
+app.delete('/api/courses/:id', authMiddleware, async (req, res) => {
   try {
     const row = await queryOne('SELECT file_path FROM courses WHERE id = ?', [req.params.id]);
     if (row && row.file_path) {
@@ -211,7 +217,7 @@ app.get('/api/questions', async (req, res) => {
   }
 });
 
-app.post('/api/questions', async (req, res) => {
+app.post('/api/questions', authMiddleware, async (req, res) => {
   try {
     const { course_id, type, content, options, answer, explanation } = req.body;
     const id = uuidv4();
@@ -227,7 +233,7 @@ app.post('/api/questions', async (req, res) => {
 });
 
 // 批量创建考题
-app.post('/api/questions/batch', async (req, res) => {
+app.post('/api/questions/batch', authMiddleware, async (req, res) => {
   try {
     const { course_id, questions } = req.body;
     if (!questions || !Array.isArray(questions) || questions.length === 0) {
@@ -249,7 +255,7 @@ app.post('/api/questions/batch', async (req, res) => {
   }
 });
 
-app.put('/api/questions/:id', async (req, res) => {
+app.put('/api/questions/:id', authMiddleware, async (req, res) => {
   try {
     const { course_id, type, content, options, answer, explanation } = req.body;
     await runSql(
@@ -262,7 +268,7 @@ app.put('/api/questions/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/questions/:id', async (req, res) => {
+app.delete('/api/questions/:id', authMiddleware, async (req, res) => {
   try {
     await runSql('DELETE FROM questions WHERE id = ?', [req.params.id]);
     res.json({ message: '删除成功' });
@@ -283,7 +289,7 @@ app.get('/api/departments', async (req, res) => {
   }
 });
 
-app.post('/api/departments', async (req, res) => {
+app.post('/api/departments', authMiddleware, async (req, res) => {
   try {
     const { name, description } = req.body;
     if (!name || !name.trim()) {
@@ -302,6 +308,37 @@ app.post('/api/departments', async (req, res) => {
     } else {
       res.status(500).json({ error: err.message });
     }
+  }
+});
+
+app.put('/api/departments/:id', authMiddleware, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: '部门名称不能为空' });
+    }
+    await runSql(
+      'UPDATE departments SET name = ?, description = ? WHERE id = ?',
+      [name.trim(), description || '', req.params.id]
+    );
+    res.json({ id: req.params.id, name: name.trim(), description });
+  } catch (err) {
+    console.error('更新部门失败:', err);
+    if (err.message && err.message.includes('UNIQUE')) {
+      res.status(400).json({ error: '部门名称已存在' });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
+
+app.delete('/api/departments/:id', authMiddleware, async (req, res) => {
+  try {
+    await runSql('DELETE FROM departments WHERE id = ?', [req.params.id]);
+    res.json({ message: '删除成功' });
+  } catch (err) {
+    console.error('删除部门失败:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -324,7 +361,7 @@ app.get('/api/employees', async (req, res) => {
   }
 });
 
-app.post('/api/employees', async (req, res) => {
+app.post('/api/employees', authMiddleware, async (req, res) => {
   try {
     const { name, department_id, position, phone, email } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: '姓名不能为空' });
@@ -335,9 +372,8 @@ app.post('/api/employees', async (req, res) => {
       [id, name.trim(), department_id, position || '', phone || '', email || '']
     );
     // 自动创建登录账号，用户名=姓名拼音或姓名，密码=123456
-    const crypto = require('crypto');
     const username = name.trim();
-    const hashedPwd = crypto.createHash('sha256').update('123456').digest('hex').substring(0, 20);
+    const hashedPwd = hashPassword('123456');
     const userId = uuidv4();
     try {
       await runSql(
@@ -354,7 +390,7 @@ app.post('/api/employees', async (req, res) => {
   }
 });
 
-app.put('/api/employees/:id', async (req, res) => {
+app.put('/api/employees/:id', authMiddleware, async (req, res) => {
   try {
     const { name, department_id, position, phone, email } = req.body;
     await runSql(
@@ -367,7 +403,7 @@ app.put('/api/employees/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/employees/:id', async (req, res) => {
+app.delete('/api/employees/:id', authMiddleware, async (req, res) => {
   try {
     await runSql('DELETE FROM employees WHERE id = ?', [req.params.id]);
     res.json({ message: '删除成功' });
@@ -383,13 +419,21 @@ app.get('/api/trainings', async (req, res) => {
     const rows = await queryAll(
       'SELECT t.*, c.title as course_title, d.name as department_name FROM trainings t LEFT JOIN courses c ON t.course_id = c.id LEFT JOIN departments d ON t.department_id = d.id ORDER BY t.created_at DESC'
     );
+    // 为每个培训添加完成统计
+    for (const training of rows) {
+      const stats = await queryOne(
+        'SELECT COUNT(*) as completed_count FROM training_progress WHERE training_id = ?',
+        [training.id]
+      );
+      training.completed_count = stats ? stats.completed_count : 0;
+    }
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/trainings', async (req, res) => {
+app.post('/api/trainings', authMiddleware, async (req, res) => {
   try {
     const { course_id, department_id, title, description, deadline, employee_ids, time_limit, question_ids } = req.body;
     const id = uuidv4();
@@ -438,13 +482,22 @@ app.get('/api/trainings/:id', async (req, res) => {
       questions = await queryAll('SELECT * FROM questions WHERE course_id = ?', [training.course_id]);
     }
     training.questions = questions.map(q => ({ ...q, options: JSON.parse(q.options || '[]') }));
+
+    // 完成人数/总人数统计
+    const progressStats = await queryOne(
+      'SELECT COUNT(*) as completed_count, AVG(score) as avg_score FROM training_progress WHERE training_id = ?',
+      [req.params.id]
+    );
+    training.completed_count = progressStats ? progressStats.completed_count : 0;
+    training.avg_score = progressStats && progressStats.avg_score ? Math.round(progressStats.avg_score) : 0;
+
     res.json(training);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.delete('/api/trainings/:id', async (req, res) => {
+app.delete('/api/trainings/:id', authMiddleware, async (req, res) => {
   try {
     await runSql('DELETE FROM trainings WHERE id = ?', [req.params.id]);
     res.json({ message: '删除成功' });
@@ -455,7 +508,7 @@ app.delete('/api/trainings/:id', async (req, res) => {
 
 // ============ 进度 API ============
 
-app.post('/api/progress', async (req, res) => {
+app.post('/api/progress', authMiddleware, async (req, res) => {
   try {
     const { training_id, user_name, employee_id, score, answers } = req.body;
     const id = uuidv4();
@@ -514,13 +567,36 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
 
 // ============ 登录 API ============
 
+// 密码哈希工具函数（pbkdf2）
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha256').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  // 兼容旧的 SHA256 截断格式（20位hex无冒号）
+  if (!stored.includes(':')) {
+    const oldHash = crypto.createHash('sha256').update(password).digest('hex').substring(0, 20);
+    return oldHash === stored;
+  }
+  const [salt, hash] = stored.split(':');
+  const verify = crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha256').toString('hex');
+  return hash === verify;
+}
+
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const crypto = require('crypto');
-    const hashedPwd = crypto.createHash('sha256').update(password).digest('hex').substring(0, 20);
-    const user = await queryOne('SELECT * FROM users WHERE username = ? AND password = ?', [username, hashedPwd]);
-    if (!user) return res.status(401).json({ error: '用户名或密码错误' });
+    const user = await queryOne('SELECT * FROM users WHERE username = ?', [username]);
+    if (!user || !verifyPassword(password, user.password)) {
+      return res.status(401).json({ error: '用户名或密码错误' });
+    }
+    // 如果是旧格式密码，升级为新格式
+    if (!user.password.includes(':')) {
+      const newPwd = hashPassword(password);
+      await runSql('UPDATE users SET password = ? WHERE id = ?', [newPwd, user.id]);
+    }
     const token = jwt.sign({ id: user.id, username: user.username, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id: user.id, username: user.username, name: user.name, role: user.role } });
   } catch (err) {
@@ -539,7 +615,7 @@ app.get('/api/user/info', authMiddleware, async (req, res) => {
 
 // ============ 学习记录 API ============
 
-app.post('/api/study-records', async (req, res) => {
+app.post('/api/study-records', authMiddleware, async (req, res) => {
   try {
     const { employee_id, course_id, duration, last_position, completed } = req.body;
     const existing = await queryOne('SELECT id FROM study_records WHERE employee_id = ? AND course_id = ?', [employee_id, course_id]);
@@ -621,6 +697,73 @@ app.get('/api/export/training/:id', async (req, res) => {
     res.end();
   } catch (err) {
     console.error('导出失败:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ 用户管理 API ============
+
+app.get('/api/users', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: '权限不足' });
+    }
+    const rows = await queryAll('SELECT id, username, name, role, employee_id, created_at FROM users ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: '权限不足' });
+    }
+    const { name, role, password } = req.body;
+    const existing = await queryOne('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: '用户不存在' });
+
+    if (password) {
+      const hashedPwd = hashPassword(password);
+      await runSql('UPDATE users SET name = ?, role = ?, password = ? WHERE id = ?', [name || existing.name, role || existing.role, hashedPwd, req.params.id]);
+    } else {
+      await runSql('UPDATE users SET name = ?, role = ? WHERE id = ?', [name || existing.name, role || existing.role, req.params.id]);
+    }
+    res.json({ id: req.params.id, name: name || existing.name, role: role || existing.role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: '权限不足' });
+    }
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ error: '不能删除自己' });
+    }
+    await runSql('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ message: '删除成功' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============ 最近完成记录 API ============
+
+app.get('/api/recent-completions', async (req, res) => {
+  try {
+    const rows = await queryAll(
+      `SELECT p.*, e.name as employee_name, t.title as training_title
+       FROM training_progress p
+       LEFT JOIN employees e ON p.user_name = e.id
+       LEFT JOIN trainings t ON p.training_id = t.id
+       ORDER BY p.completed_at DESC LIMIT 10`
+    );
+    res.json(rows);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

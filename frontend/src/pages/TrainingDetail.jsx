@@ -173,6 +173,20 @@ function TrainingDetail() {
                 </div>
                 <div style={{ color: '#666' }}>及格分数</div>
               </div>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#722ed1' }}>
+                  {training.completed_count || 0}
+                </div>
+                <div style={{ color: '#666' }}>已完成人数</div>
+              </div>
+              {training.avg_score > 0 && (
+                <div>
+                  <div style={{ fontSize: 24, fontWeight: 'bold', color: '#fa8c16' }}>
+                    {training.avg_score}分
+                  </div>
+                  <div style={{ color: '#666' }}>平均分</div>
+                </div>
+              )}
             </Space>
           </Card>
         )}

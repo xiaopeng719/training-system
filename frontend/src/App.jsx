@@ -19,6 +19,7 @@ import TrainingList from './pages/TrainingList';
 import TrainingDetail from './pages/TrainingDetail';
 import ExamPage from './pages/ExamPage';
 import MyTrainings from './pages/MyTrainings';
+import UserManagement from './pages/UserManagement';
 
 const { Header, Sider, Content } = Layout;
 
@@ -33,6 +34,7 @@ function AppContent({ user, onLogout }) {
     { key: '/departments', icon: <TeamOutlined />, label: <Link to="/departments">部门管理</Link>, adminOnly: true },
     { key: '/employees', icon: <UserOutlined />, label: <Link to="/employees">员工管理</Link>, adminOnly: true },
     { key: '/trainings', icon: <TrophyOutlined />, label: <Link to="/trainings">培训任务</Link>, adminOnly: true },
+    { key: '/users', icon: <UserOutlined />, label: <Link to="/users">用户管理</Link>, adminOnly: true },
     { key: '/my-trainings', icon: <BookOutlined />, label: <Link to="/my-trainings">我的培训</Link>, adminOnly: false }
   ];
 
@@ -74,6 +76,7 @@ function AppContent({ user, onLogout }) {
               <Route path="/departments" element={<DepartmentList />} />
               <Route path="/employees" element={<EmployeeList />} />
               <Route path="/trainings" element={<TrainingList />} />
+              <Route path="/users" element={<UserManagement />} />
             </>}
             <Route path="/courses/:id" element={<CourseViewer />} />
             <Route path="/my-trainings" element={<MyTrainings />} />

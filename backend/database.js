@@ -135,9 +135,10 @@ const initDatabase = async () => {
   // 创建默认管理员账号
   const userResult = db.exec('SELECT COUNT(*) as count FROM users');
   if (userResult[0] && userResult[0].values[0][0] === 0) {
-    // 简单密码哈希
     const crypto = require('crypto');
-    const hashedPwd = crypto.createHash('sha256').update('admin123').digest('hex').substring(0, 20);
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync('admin123', salt, 10000, 32, 'sha256').toString('hex');
+    const hashedPwd = `${salt}:${hash}`;
     db.run("INSERT INTO users (id, username, password, name, role) VALUES ('admin-1', 'admin', '"+hashedPwd+"', '系统管理员', 'admin')");
     console.log('默认管理员已创建: admin / admin123');
   }
