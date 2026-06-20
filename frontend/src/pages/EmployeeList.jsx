@@ -156,6 +156,9 @@ function EmployeeList() {
           <Form.Item name="username" label="用户账号" rules={[{ required: true, message: '请输入用户账号' }]}>
             <Input placeholder="用于登录的账号（如 zhangsan）" />
           </Form.Item>
+          <Form.Item name="password" label="密码" extra="不填则默认 123456">
+            <Input.Password placeholder="请输入密码（选填）" />
+          </Form.Item>
           <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
             <Input placeholder="请输入姓名" />
           </Form.Item>

@@ -363,7 +363,7 @@ app.get('/api/employees', async (req, res) => {
 
 app.post('/api/employees', authMiddleware, async (req, res) => {
   try {
-    const { name, department_id, position, phone, email, username } = req.body;
+    const { name, department_id, position, phone, email, username, password } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: '姓名不能为空' });
     if (!department_id) return res.status(400).json({ error: '请选择部门' });
     if (!username || !username.trim()) return res.status(400).json({ error: '用户账号不能为空' });
@@ -372,8 +372,8 @@ app.post('/api/employees', authMiddleware, async (req, res) => {
       'INSERT INTO employees (id, name, department_id, position, phone, email, username) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [id, name.trim(), department_id, position || '', phone || '', email || '', username.trim()]
     );
-    // 自动创建登录账号，密码=123456
-    const hashedPwd = hashPassword('123456');
+    // 自动创建登录账号
+    const hashedPwd = hashPassword(password || '123456');
     const userId = uuidv4();
     try {
       await runSql(
