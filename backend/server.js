@@ -363,27 +363,29 @@ app.get('/api/employees', async (req, res) => {
 
 app.post('/api/employees', authMiddleware, async (req, res) => {
   try {
-    const { name, department_id, position, phone, email } = req.body;
+    const { name, department_id, position, phone, email, username } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: '姓名不能为空' });
     if (!department_id) return res.status(400).json({ error: '请选择部门' });
+    if (!username || !username.trim()) return res.status(400).json({ error: '用户账号不能为空' });
     const id = uuidv4();
     await runSql(
-      'INSERT INTO employees (id, name, department_id, position, phone, email) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, name.trim(), department_id, position || '', phone || '', email || '']
+      'INSERT INTO employees (id, name, department_id, position, phone, email, username) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, name.trim(), department_id, position || '', phone || '', email || '', username.trim()]
     );
-    // 自动创建登录账号，用户名=姓名拼音或姓名，密码=123456
-    const username = name.trim();
+    // 自动创建登录账号，密码=123456
     const hashedPwd = hashPassword('123456');
     const userId = uuidv4();
     try {
       await runSql(
         'INSERT INTO users (id, username, password, name, role, employee_id) VALUES (?, ?, ?, ?, ?, ?)',
-        [userId, username, hashedPwd, name.trim(), 'user', id]
+        [userId, username.trim(), hashedPwd, name.trim(), 'user', id]
       );
     } catch (e) {
-      // 用户名重复则跳过
+      if (e.message && e.message.includes('UNIQUE')) {
+        return res.status(400).json({ error: '用户账号已存在，请换一个' });
+      }
     }
-    res.json({ id, name: name.trim(), department_id, position, phone, email });
+    res.json({ id, name: name.trim(), department_id, position, phone, email, username: username.trim() });
   } catch (err) {
     console.error('创建员工失败:', err);
     res.status(500).json({ error: err.message });

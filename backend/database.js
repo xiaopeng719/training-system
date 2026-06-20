@@ -84,6 +84,7 @@ const initDatabase = async () => {
     CREATE TABLE IF NOT EXISTS employees (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      username TEXT UNIQUE,
       department_id TEXT NOT NULL,
       position TEXT DEFAULT '',
       phone TEXT DEFAULT '',

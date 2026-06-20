@@ -71,6 +71,12 @@ function EmployeeList() {
 
   const columns = [
     {
+      title: '账号',
+      dataIndex: 'username',
+      key: 'username',
+      render: (text) => text || '-'
+    },
+    {
       title: '姓名',
       dataIndex: 'name',
       key: 'name',
@@ -147,6 +153,9 @@ function EmployeeList() {
         footer={null}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Form.Item name="username" label="用户账号" rules={[{ required: true, message: '请输入用户账号' }]}>
+            <Input placeholder="用于登录的账号（如 zhangsan）" />
+          </Form.Item>
           <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
             <Input placeholder="请输入姓名" />
           </Form.Item>
