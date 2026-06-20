@@ -156,6 +156,11 @@ function TrainingDetail() {
               {training.description}
             </Descriptions.Item>
           )}
+          {training.min_study_time > 0 && (
+            <Descriptions.Item label="最低学习时长">
+              <Tag color="orange">{Math.ceil(training.min_study_time / 60)} 分钟</Tag>
+            </Descriptions.Item>
+          )}
         </Descriptions>
 
         {training.questions && training.questions.length > 0 && (

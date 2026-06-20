@@ -101,6 +101,7 @@ function TrainingList() {
           <Form.Item name="description" label="培训说明"><TextArea rows={2} /></Form.Item>
           <Form.Item name="deadline" label="截止时间"><DatePicker showTime format="YYYY-MM-DD HH:mm:ss" style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="time_limit" label="考试限时（分钟）" extra="0表示不限"><Input type="number" min={0} /></Form.Item>
+          <Form.Item name="min_study_time" label="最低学习时长（分钟）" extra="学员需学习满指定时长才能参加考试，0表示不限"><Input type="number" min={0} /></Form.Item>
           <Form.Item><Space><Button type="primary" htmlType="submit">创建</Button><Button onClick={() => { setModalVisible(false); form.resetFields(); }}>取消</Button></Space></Form.Item>
         </Form>
       </Modal>

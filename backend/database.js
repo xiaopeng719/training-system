@@ -61,6 +61,7 @@ const initDatabase = async () => {
       description TEXT,
       deadline DATETIME,
       time_limit INTEGER DEFAULT 0,
+      min_study_time INTEGER DEFAULT 0,
       status TEXT DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -70,6 +71,7 @@ const initDatabase = async () => {
     CREATE TABLE IF NOT EXISTS training_progress (
       id TEXT PRIMARY KEY,
       training_id TEXT NOT NULL,
+      employee_id TEXT,
       user_name TEXT NOT NULL,
       score INTEGER,
       answers TEXT DEFAULT '{}',

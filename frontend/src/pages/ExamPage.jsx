@@ -8,6 +8,7 @@ import {
   ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined 
 } from '@ant-design/icons';
 import { trainingApi, progressApi } from '../services/api';
+import axios from 'axios';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -21,11 +22,12 @@ function ExamPage() {
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [nameModalVisible, setNameModalVisible] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [results, setResults] = useState(null);
+  const [studyTime, setStudyTime] = useState(0);
+  const [minStudyTime, setMinStudyTime] = useState(0);
   const timerRef = useRef(null);
-  const [form] = Form.useForm();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
     loadTraining();
@@ -39,6 +41,17 @@ function ExamPage() {
       setQuestions(res.data.questions || []);
       if (res.data.time_limit > 0) {
         setTimeLeft(res.data.time_limit * 60);
+      }
+      // 加载最低学习时长要求
+      setMinStudyTime(res.data.min_study_time || 0);
+      // 加载当前用户的学习时长
+      if (user.id && res.data.course_id) {
+        try {
+          const srRes = await axios.get(`/api/study-records?employee_id=${user.id}&course_id=${res.data.course_id}`);
+          if (srRes.data.length > 0) {
+            setStudyTime(srRes.data[0].duration || 0);
+          }
+        } catch (e) {}
       }
     } catch (err) {
       message.error('加载考试失败');
@@ -64,8 +77,7 @@ function ExamPage() {
   }, [submitted]);
 
   const autoSubmit = () => {
-    // 自动提交时用"匿名"
-    submitExam('匿名用户');
+    submitExam();
   };
 
   const formatTime = (seconds) => {
@@ -100,15 +112,27 @@ function ExamPage() {
   };
 
   const handleSubmit = () => {
+    // 检查是否已登录
+    if (!user.id) {
+      message.error('请先登录后再参加考试');
+      return;
+    }
+    // 检查学习时长
+    if (minStudyTime > 0 && studyTime < minStudyTime) {
+      const needMinutes = Math.ceil((minStudyTime - studyTime) / 60);
+      message.warning(`学习时长不足，还需学习约 ${needMinutes} 分钟才能参加考试`);
+      return;
+    }
     const unanswered = questions.filter(q => !answers[q.id]);
     if (unanswered.length > 0) {
       message.warning(`还有 ${unanswered.length} 道题未作答`);
       return;
     }
-    setNameModalVisible(true);
+    // 直接提交，不再弹出姓名输入框
+    submitExam();
   };
 
-  const submitExam = async (userName) => {
+  const submitExam = async () => {
     const { score: finalScore, details } = calculateScoreAndResults();
     setScore(finalScore);
     setResults(details);
@@ -116,20 +140,16 @@ function ExamPage() {
     try {
       await progressApi.submit({
         training_id: trainingId,
-        user_name: userName,
+        user_name: user.name,
+        employee_id: user.id,
         score: finalScore,
         answers
       });
       setSubmitted(true);
-      setNameModalVisible(false);
       if (timerRef.current) clearInterval(timerRef.current);
     } catch (err) {
       message.error('提交失败');
     }
-  };
-
-  const handleFinalSubmit = async (values) => {
-    submitExam(values.user_name);
   };
 
   const renderQuestion = (question) => {
@@ -289,18 +309,15 @@ function ExamPage() {
             ))}
           </Space>
         </Card>
-      </Card>
 
-      <Modal title="请输入您的姓名" open={nameModalVisible} onCancel={() => setNameModalVisible(false)} footer={null}>
-        <Form form={form} onFinish={handleFinalSubmit}>
-          <Form.Item name="user_name" rules={[{ required: true, message: '请输入姓名' }]}>
-            <Input placeholder="请输入您的姓名" size="large" />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" block size="large">确认提交</Button>
-          </Form.Item>
-        </Form>
-      </Modal>
+        {minStudyTime > 0 && studyTime < minStudyTime && (
+          <Alert
+            type="warning"
+            showIcon
+            message={`学习时长不足：已学习 ${Math.floor(studyTime / 60)} 分钟，需 ${Math.ceil(minStudyTime / 60)} 分钟才能参加考试`}
+            style={{ marginTop: 16 }}
+          />
+        )}
     </div>
   );
 }

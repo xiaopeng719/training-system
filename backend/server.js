@@ -435,11 +435,11 @@ app.get('/api/trainings', async (req, res) => {
 
 app.post('/api/trainings', authMiddleware, async (req, res) => {
   try {
-    const { course_id, department_id, title, description, deadline, employee_ids, time_limit, question_ids } = req.body;
+    const { course_id, department_id, title, description, deadline, employee_ids, time_limit, question_ids, min_study_time } = req.body;
     const id = uuidv4();
     await runSql(
-      'INSERT INTO trainings (id, course_id, department_id, title, description, deadline, time_limit) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [id, course_id, department_id, title, description || '', deadline || '', time_limit || 0]
+      'INSERT INTO trainings (id, course_id, department_id, title, description, deadline, time_limit, min_study_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, course_id, department_id, title, description || '', deadline || '', time_limit || 0, min_study_time || 0]
     );
     // 如果指定了考题
     if (question_ids && question_ids.length > 0) {
@@ -511,13 +511,53 @@ app.delete('/api/trainings/:id', authMiddleware, async (req, res) => {
 app.post('/api/progress', authMiddleware, async (req, res) => {
   try {
     const { training_id, user_name, employee_id, score, answers } = req.body;
-    const id = uuidv4();
-    await runSql(
-      "INSERT INTO training_progress (id, training_id, user_name, score, answers, completed_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
-      [id, training_id, user_name, score, JSON.stringify(answers || {})]
+    
+    // 验证：必须提供员工ID
+    if (!employee_id) {
+      return res.status(400).json({ error: '缺少员工信息，请重新登录' });
+    }
+    
+    // 验证：检查学习时长是否满足要求
+    const training = await queryOne('SELECT min_study_time, course_id FROM trainings WHERE id = ?', [training_id]);
+    if (training && training.min_study_time > 0) {
+      const studyRecord = await queryOne(
+        'SELECT duration FROM study_records WHERE employee_id = ? AND course_id = ?',
+        [employee_id, training.course_id]
+      );
+      const studyDuration = studyRecord ? studyRecord.duration : 0;
+      if (studyDuration < training.min_study_time) {
+        const needMinutes = Math.ceil((training.min_study_time - studyDuration) / 60);
+        return res.status(400).json({ 
+          error: `学习时长不足，还需学习约 ${needMinutes} 分钟`,
+          study_duration: studyDuration,
+          min_required: training.min_study_time
+        });
+      }
+    }
+    
+    // 检查是否已经提交过（同一员工同一培训只保留最新成绩）
+    const existing = await queryOne(
+      'SELECT id FROM training_progress WHERE training_id = ? AND employee_id = ?',
+      [training_id, employee_id]
     );
-    res.json({ id, training_id, user_name, score });
+    
+    if (existing) {
+      // 更新已有记录
+      await runSql(
+        "UPDATE training_progress SET user_name = ?, score = ?, answers = ?, completed_at = datetime('now') WHERE id = ?",
+        [user_name, score, JSON.stringify(answers || {}), existing.id]
+      );
+      res.json({ id: existing.id, training_id, user_name, score, updated: true });
+    } else {
+      const id = uuidv4();
+      await runSql(
+        "INSERT INTO training_progress (id, training_id, employee_id, user_name, score, answers, completed_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+        [id, training_id, employee_id, user_name, score, JSON.stringify(answers || {})]
+      );
+      res.json({ id, training_id, user_name, score });
+    }
   } catch (err) {
+    console.error('提交进度失败:', err);
     res.status(500).json({ error: err.message });
   }
 });
