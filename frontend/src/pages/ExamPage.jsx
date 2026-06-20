@@ -318,6 +318,7 @@ function ExamPage() {
             style={{ marginTop: 16 }}
           />
         )}
+      </Card>
     </div>
   );
 }
